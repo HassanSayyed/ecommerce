@@ -1,7 +1,7 @@
 const router  = require("express").Router();
 const User = require("../models/User");
 const CryptoJS = require("crypto-js");
-const { json } = require("express");
+const jwt = require("jsonwebtoken");
 
 
 
@@ -31,17 +31,29 @@ router.post("/login" , async (req,res)=> {
     try {
         const user = await User.findOne({username: req.body.username});
 
-        !user && res.status(401).json("Wrong credenttial!");
+         if(!user) return res.status(401).json("user not found!");
 
 
         const hashPassword = CryptoJS.AES.decrypt(
             user.password,
             process.env.PASSWORD_SECRET
-        ).toString(CryptoJS.enc.Utf8);
+        );
 
-        hashPassword !== req.body.password && res.status(401).json("Wrong credenttial!");
+        const originalPassword = hashPassword.toString(CryptoJS.enc.Utf8);
 
-        res.status(200).json(user);
+        if(originalPassword !== req.body.password) return res.status(401).json("Wrong password!");
+
+        const acessToken = jwt.sign({
+            id:      user.id,
+            isAdmin: user.isAdmin
+        },
+            process.env.JWT_SECRET,
+            {expiresIn: "15d"}
+        );
+
+        const {password, ...others} = user._doc ;
+
+        res.status(200).json({...others, acessToken});
 
     } catch (error) {
         res.status(500).json("server error while login");
